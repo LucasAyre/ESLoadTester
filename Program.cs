@@ -1,35 +1,72 @@
 ﻿using System;
 using System.Text;
-
+using System.Diagnostics;
+using System.Net;
 
 namespace API_Load_Test
 {
 
     public class APICalls
     {
-        int Znumber;
+        public List<int> ByteSizesList;
+        public List<float> APICallsTimes;
+        public string BearerToken;
+        public int NumberOfCalls;
+        public DateTime Start;
+        public string GetDataURI;
 
-        public APICalls(int number)
+        public APICalls(string BearerToken,int NumberOfCalls,DateTime Start,string GetDataURI)
         {
-            this.Znumber = number;
+            this.BearerToken = BearerToken;
+            this.NumberOfCalls = NumberOfCalls;
+            this.Start = Start;
+            this.GetDataURI = GetDataURI;
+            
         }
+
         public void MakeAPICall()
         {
-            HTTPRequest HTTP_GetAuth = new HTTPRequest("https://docs.earthsense.co.uk/authapi/api/AuthUser");
-            HttpResponseMessage Response_GetAuth = HTTP_GetAuth.getRequest_GetAuth("LucasAyre", "UAjJIT0Mdkpm2nZb");
-            string ResponseString_GetAuth = Response_GetAuth.Content.ReadAsStringAsync().Result;
-            List<DateTime> StartDateList = new List<DateTime>();
-            for (int i = 0;i< 100; i++)
+            List<int> BinningByteSizesList = new List<int>();
+            List<float> BinningAPICallsTimes = new List<float>();
+            Stopwatch MinuteCounter = Stopwatch.StartNew();
+            int count = 1;
+            int TotalByteSizes = 0;
+            ByteSizesList = new List<int>();
+            Program p = new Program();
+
+            TimeSpan TotalTimes = TimeSpan.Zero;
+            APICallsTimes = new List<float>();
+            for (int i = 0;i< NumberOfCalls ; i++)
             {
-                Program p = new Program();
-                DateTime randomDay = p.RandomDay();
-                StartDateList.Add(randomDay);
-                HTTPRequest HTTP_BearerToken = new HTTPRequest(p.HttpRequestString(randomDay));
-                HttpResponseMessage Response_BearerToken = HTTP_BearerToken.getRequest_BearerToken(ResponseString_GetAuth);
-            }
-            foreach (DateTime startDate in StartDateList)
-            {
-                Console.WriteLine(startDate.ToString());
+                Stopwatch APICallStopwatch = new Stopwatch();
+
+
+                DateTime StartDate = p.GetStartDate(Start);
+                HTTPRequest HTTP_GetData = new HTTPRequest(p.GetURI(StartDate,GetDataURI));
+
+                APICallStopwatch.Start();
+                HttpResponseMessage Response_GetData = HTTP_GetData.getRequestGetData(BearerToken);
+                APICallStopwatch.Stop();
+
+                HttpStatusCode code = Response_GetData.StatusCode;
+                Byte[] Bytes = Response_GetData.Content.ReadAsByteArrayAsync().Result;
+                int ByteSize = Bytes.Length;
+                if (code == HttpStatusCode.OK)
+                {
+                    ByteSizesList.Add(ByteSize);
+                    BinningByteSizesList.Add(ByteSize);
+                }
+                APICallsTimes.Add(APICallStopwatch.ElapsedMilliseconds);
+                BinningAPICallsTimes.Add(APICallStopwatch.ElapsedMilliseconds);
+                
+
+                if (MinuteCounter.Elapsed.Seconds > count)
+                {
+                    Console.WriteLine($"{DateTime.Now,5}   {Math.Round(BinningAPICallsTimes.Average(),2).ToString("0.00"),5} {BinningAPICallsTimes.Count,5}  {Math.Round(BinningByteSizesList.Average(),2).ToString("0.00"),5}    {BinningByteSizesList.Count,5}  {count+1,5}");
+                    BinningByteSizesList.Clear();
+                    BinningAPICallsTimes.Clear();
+                    count = count + 1;
+                }
             }
         }
     }
@@ -38,69 +75,76 @@ namespace API_Load_Test
     public class Program
     {
         public Random gen = new Random();
-        public DateTime RandomDay()
+
+
+        public DateTime GetStartDate(DateTime start)
         {
-            DateTime start = new DateTime(2022, 4, 22);
             int range = (DateTime.Today - start).Days;
             return start.AddDays(gen.Next(range));
         }
 
-
-
-
-        public string HttpRequestString(DateTime StartDate)
+        public string GetURI(DateTime StartDate,string _URI)
         {
             DateTime EndDate = new DateTime();
             EndDate = StartDate.AddDays(7);
-            
-            string URI = $"https://docs.earthsense.co.uk/vzephyrapi/api/GetData/?vzephyr_id=180&start_dt={StartDate.ToString()}T08%3A41%3A00&end_dt={EndDate.ToString()}T08%3A41%3A00";
+            string URI = $"{_URI}&start_dt={StartDate.ToString("yyyy/MM/dd HH:mm:ss")}&end_dt={EndDate.ToString("yyyy/MM/dd HH:mm:ss")}";
 
             return URI.ToString();
         }
 
-
-        static void Main(string[] args)
+        static void Main(string[] args) 
         {
             Program p = new Program();
-            HTTPRequest HTTP_GetAuth = new HTTPRequest("https://docs.earthsense.co.uk/authapi/api/AuthUser");
+
+            int NumberOfCalls = 5;
+            int ThreadLimit = 5;
+            DateTime Start = new DateTime(2022, 8, 21);
+            string GetDataURI_NoDates = "https://service-dev.earthsense.co.uk/vzephyrapi/api/GetData/?vzephyr_id=180";
+            string? GetAuthURI = "https://service.earthsense.co.uk/authapi/api/AuthUser";
+
+            HTTPRequest HTTP_GetAuth = new HTTPRequest(GetAuthURI);
             HttpResponseMessage Response_GetAuth = HTTP_GetAuth.getRequest_GetAuth("LucasAyre", "UAjJIT0Mdkpm2nZb");
             string ResponseString_GetAuth = Response_GetAuth.Content.ReadAsStringAsync().Result;
 
-
-
             List<APICalls> ListOfAPICalls = new List<APICalls>();
 
-            int _threadLimit = 100;
 
             //Phase 1 - Initialise object (list of objects)
-            for (int i = 0; i < _threadLimit; i++)
+            for (int i = 0; i < ThreadLimit; i++)
             {
-                ListOfAPICalls.Add(new APICalls(i));
+                ListOfAPICalls.Add(new APICalls(ResponseString_GetAuth,NumberOfCalls,Start,GetDataURI_NoDates));
             }
 
             //Phase 2 - Assign to thread
             List<ThreadStart> ThreadStartList = new List<ThreadStart>();
             List<Thread> ThreadList = new List<Thread>();
 
-            for (int i = 0; i < _threadLimit; i++)
+            for (int i = 0; i < ThreadLimit; i++)
             {
                 ThreadStartList.Add(ListOfAPICalls[i].MakeAPICall);
                 ThreadList.Add(new Thread(ThreadStartList[i]));
             }
 
             //Phase 3 - Start threads
-            for (int i = 0; i < _threadLimit; i++)
+            for (int i = 0; i < ThreadLimit; i++)
             {
                 ThreadList[i].Start();
             }
+            string ms = "(ms)";
+            string b = "(b)";
+            Console.WriteLine($"{ms,25}{b,15}");
 
-            for (int i = 0; i < _threadLimit; i++)
+            for (int i = 0; i < ThreadLimit; i++)
             {
-                ThreadList[i].Join();
+                while (ThreadList[i].IsAlive) { }
             }
 
-
-
+            for (int i = 0; i < ThreadLimit; i++)
+            {
+                ThreadList[i].Join();
+                Console.WriteLine($"\nAverages for Thread {i+1}: ");
+                Console.WriteLine($"{ListOfAPICalls[i].APICallsTimes.Average()} {ListOfAPICalls[i].ByteSizesList.Average()}");
+            }  
         }
     }
 
@@ -131,7 +175,7 @@ namespace API_Load_Test
 
             return httpClient.SendAsync(request).Result;
         }
-        public HttpResponseMessage getRequest_BearerToken(string BearerToken)
+        public HttpResponseMessage getRequestGetData(string BearerToken)
         {
 
 

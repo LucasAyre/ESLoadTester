@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "API Load Test": {
+      "commandName": "Project",
+      "commandLineArgs": "5\r\n5\r\n(2022,8,21)"
+    },
+    "Profile 1": {
+      "commandName": "Project",
+      "commandLineArgs": "5\r\n5\r\n(2022,8,21)"
+    }
+  }
+}
