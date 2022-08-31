@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Net;
 using System.CommandLine;
 using CommandLine;
+using System.IO;
 
 namespace API_Load_Test
 {
@@ -116,12 +117,19 @@ namespace API_Load_Test
         static void Main(string[] args)
         {
             Program p = new Program();
-            List<int> NumberOfCalls =  p.CallsPerThread;
+            List<int> NumberOfCalls = p.CallsPerThread;
             List<int> ThreadLimit = p.ThreadLimit;
             DateTime Start = new DateTime(2022, 4, 21);
             string GetDataURI_NoDates = "https://service-dev.earthsense.co.uk/virtualzephyr/api/GetData/?vzephyr_id=180";
             string GetAuthURI = "https://service.earthsense.co.uk/authapi/api/AuthUser";
-            string filepath = @"C:\Users\layre\OneDrive - Loughborough College\Industry Placement\Repos\ESLoadTester\APICallsOutput.csv";
+            string filename = "/APICallsOutput.csv";
+            string directory = Directory.GetCurrentDirectory();
+            Console.WriteLine(directory + filename);
+            if (!File.Exists(directory + filename)) 
+            { 
+                File.Create(directory + filename);
+            }
+
 
             p.parseArguments(args);
 
@@ -129,7 +137,7 @@ namespace API_Load_Test
             HTTPRequest HTTP_GetAuth = new HTTPRequest(GetAuthURI);
             HttpResponseMessage Response_GetAuth = HTTP_GetAuth.getRequest_GetAuth("LucasAyre", "UAjJIT0Mdkpm2nZb");
             string ResponseString_GetAuth = Response_GetAuth.Content.ReadAsStringAsync().Result;
-            File.WriteAllText(filepath, "");
+            File.WriteAllText(directory+filename, "");
             for (int j =0; j < ThreadLimit.Count; j++)
             {
                 List<APICalls> ListOfAPICalls = new List<APICalls>();
@@ -138,7 +146,7 @@ namespace API_Load_Test
                 //Phase 1 - Initialise object (list of objects)
                 for (int i = 0; i < ThreadLimit[j]; i++)
                 {
-                    ListOfAPICalls.Add(new APICalls(ResponseString_GetAuth, NumberOfCalls[j],Start,GetDataURI_NoDates,filepath));
+                    ListOfAPICalls.Add(new APICalls(ResponseString_GetAuth, NumberOfCalls[j],Start,GetDataURI_NoDates,directory + filename));
                 }
 
                 //Phase 2 - Assign to thread
@@ -181,8 +189,8 @@ namespace API_Load_Test
                 string output = $"{OverallAverageCallTimes.Average(),5}, {Math.Round(OverallAverageSizeOfResponse.Average()),5}, {OverallTotalNumberOfFailedCalls,5}";
                 Console.WriteLine(output);
 
-                File.AppendAllText(filepath,output);
-                File.AppendAllText(filepath, "\n");
+                File.AppendAllText(directory + filename,output);
+                File.AppendAllText(directory + filename, "\n");
             }
 
             
