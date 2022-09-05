@@ -30,11 +30,16 @@ namespace API_Load_Test
 
         public void MakeAPICall()
         {
+            List<int> totalStatuses = new List<int>() { 0,0,0,0 };
+
+
+
             DateTime Calls_StartTime = DateTime.Now;
             int TotalNumberOfCallsCompleted = 0;
             List<int> BinningByteSizesList = new List<int>();
             List<float> BinningAPICallsTimes = new List<float>();
-            Stopwatch MinuteCounter = Stopwatch.StartNew();
+            double previousTime = 0;
+            Stopwatch timeCounter = Stopwatch.StartNew();
             int count = 0;
             int TotalByteSizes = 0;
             ByteSizesList = new List<int>();
@@ -42,11 +47,19 @@ namespace API_Load_Test
 
             TimeSpan TotalTimes = TimeSpan.Zero;
             APICallsTimes = new List<float>();
-            int FailedCallsOverTime = 0;
+            bool changeToSeconds = false;
+            if (NumberOfCalls < 20)
+            {
+                changeToSeconds = true;
+            }            
+            
             for (int i = 0;i< NumberOfCalls ; i++)
             {
-                Stopwatch APICallStopwatch = new Stopwatch();
 
+                GetRequestStatus status = new GetRequestStatus(totalStatuses);
+
+
+                Stopwatch APICallStopwatch = new Stopwatch();
 
                 DateTime StartDate = p.GetStartDate(Start);
                 HTTPRequest HTTP_GetData = new HTTPRequest(p.GetURI(StartDate,GetDataURI));
@@ -58,32 +71,43 @@ namespace API_Load_Test
                 HttpStatusCode code = Response_GetData.StatusCode;
                 Byte[] Bytes = Response_GetData.Content.ReadAsByteArrayAsync().Result;
                 int ByteSize = Bytes.Length;
-                if (code == HttpStatusCode.OK)
+                totalStatuses = status.DetermineStatus((int)code);
+                
+                if ((int)code > 200 | (int)code < 200)
                 {
-                    ByteSizesList.Add(ByteSize);
-                    BinningByteSizesList.Add(ByteSize);
+                    FailedCalls += 1;
                 }
-                else
-                {
-                    FailedCalls = FailedCalls+1;
-                    FailedCallsOverTime = FailedCallsOverTime+1;
-                    ByteSizesList.Add(ByteSize);
-                    BinningByteSizesList.Add(ByteSize);
-                }
+                
+
+                ByteSizesList.Add(ByteSize);
+                BinningByteSizesList.Add(ByteSize);
+
+
                 APICallsTimes.Add(APICallStopwatch.ElapsedMilliseconds);
                 BinningAPICallsTimes.Add(APICallStopwatch.ElapsedMilliseconds);
                 TotalNumberOfCallsCompleted = TotalNumberOfCallsCompleted + 1;
 
-                if (MinuteCounter.Elapsed.Minutes > count)
+
+                TimeSpan timeSpan = DateTime.Now - Calls_StartTime;
+
+
+
+                if (changeToSeconds && Math.Truncate(timeSpan.TotalSeconds) > previousTime)
                 {
-                    string output = $"{DateTime.Now,-23}{Math.Round(BinningAPICallsTimes.Average(),2).ToString("0.00"),-10}{BinningAPICallsTimes.Count,-10}{Math.Round(BinningByteSizesList.Average(),2).ToString("0.00"),-10}{BinningByteSizesList.Count.ToString(),-15}{count,-15}{FailedCalls,-15}{FailedCallsOverTime,-15}{TotalNumberOfCallsCompleted,-10}";
-                    Console.WriteLine(output);
+                    previousTime = Math.Truncate(timeSpan.TotalSeconds);
+                    Console.WriteLine($"{DateTime.Now,-23}{Math.Round(BinningAPICallsTimes.Average(), 2).ToString("0.00"),-10}{BinningAPICallsTimes.Count,-10}{Math.Round(BinningByteSizesList.Average(), 2).ToString("0.00"),-10}{BinningByteSizesList.Count.ToString(),-15}{Math.Truncate(timeSpan.TotalSeconds),-15}{totalStatuses[0],-5}{totalStatuses[1],-5}{totalStatuses[2],-5}{totalStatuses[3],-15}{TotalNumberOfCallsCompleted,-10}");
                     BinningByteSizesList.Clear();
                     BinningAPICallsTimes.Clear();
-                    FailedCallsOverTime = 0;
-                    count = count + 1;
+
+                }
 
 
+                if (changeToSeconds == false && Math.Truncate(timeSpan.TotalMinutes) > previousTime) //Change Elapsed.Minutes to Elapsed.Seconds or vice versa to change how often the program outputs the stats
+                {
+                    previousTime = Math.Truncate(timeSpan.TotalMinutes);
+                    Console.WriteLine($"{DateTime.Now,-23}{Math.Round(BinningAPICallsTimes.Average(), 2).ToString("0.00"),-10}{BinningAPICallsTimes.Count,-10}{Math.Round(BinningByteSizesList.Average(), 2).ToString("0.00"),-10}{BinningByteSizesList.Count.ToString(),-15}{Math.Truncate(timeSpan.TotalMinutes),-15}{totalStatuses[0],-5}{totalStatuses[1],-5}{totalStatuses[2],-5}{totalStatuses[3],-15}{TotalNumberOfCallsCompleted,-10}");
+                    BinningByteSizesList.Clear();
+                    BinningAPICallsTimes.Clear();
                 }
             }
         }
@@ -118,10 +142,10 @@ namespace API_Load_Test
         {
             Program p = new Program();
             List<int> NumberOfCalls = p.CallsPerThread;
-            List<int> ThreadLimit = p.ThreadLimit;
+            List<int> threadLimit = p.ThreadLimit;
             DateTime Start = new DateTime(2022, 4, 21);
             string GetDataURI_NoDates = "https://service-dev.earthsense.co.uk/virtualzephyr/api/GetData/?vzephyr_id=180";
-            string GetAuthURI = "https://service.earthsense.co.uk/authapi/api/AuthUser";
+            string getAuthURI = "https://service.earthsense.co.uk/authapi/api/AuthUser";
             string filename = "/APICallsOutput.csv";
             string directory = Directory.GetCurrentDirectory();
             Console.WriteLine(directory + filename);
@@ -131,62 +155,61 @@ namespace API_Load_Test
             }
 
 
-            p.parseArguments(args);
+            p.ParseArguments(args);
 
 
-            HTTPRequest HTTP_GetAuth = new HTTPRequest(GetAuthURI);
-            HttpResponseMessage Response_GetAuth = HTTP_GetAuth.getRequest_GetAuth("LucasAyre", "UAjJIT0Mdkpm2nZb");
-            string ResponseString_GetAuth = Response_GetAuth.Content.ReadAsStringAsync().Result;
+            HTTPRequest http_GetAuth = new HTTPRequest(getAuthURI);
+            HttpResponseMessage response_GetAuth = http_GetAuth.getRequest_GetAuth("LucasAyre", "UAjJIT0Mdkpm2nZb");
+            string responseString_GetAuth = response_GetAuth.Content.ReadAsStringAsync().Result;
             File.WriteAllText(directory+filename, "");
-            for (int j =0; j < ThreadLimit.Count; j++)
+            for (int j =0; j < threadLimit.Count; j++)
             {
-                List<APICalls> ListOfAPICalls = new List<APICalls>();
+                List<APICalls> listOfAPICalls = new List<APICalls>();
 
 
                 //Phase 1 - Initialise object (list of objects)
-                for (int i = 0; i < ThreadLimit[j]; i++)
+                for (int i = 0; i < threadLimit[j]; i++)
                 {
-                    ListOfAPICalls.Add(new APICalls(ResponseString_GetAuth, NumberOfCalls[j],Start,GetDataURI_NoDates,directory + filename));
+                    listOfAPICalls.Add(new APICalls(responseString_GetAuth, NumberOfCalls[j],Start,GetDataURI_NoDates,directory + filename));
                 }
 
                 //Phase 2 - Assign to thread
-                List<ThreadStart> ThreadStartList = new List<ThreadStart>();
-                List<Thread> ThreadList = new List<Thread>();
+                List<ThreadStart> threadStartList = new List<ThreadStart>();
+                List<Thread> threadList = new List<Thread>();
 
-                for (int i = 0; i < ThreadLimit[j]; i++)
+                for (int i = 0; i < threadLimit[j]; i++)
                 {
-                    ThreadStartList.Add(ListOfAPICalls[i].MakeAPICall);
-                    ThreadList.Add(new Thread(ThreadStartList[i]));
+                    threadStartList.Add(listOfAPICalls[i].MakeAPICall);
+                    threadList.Add(new Thread(threadStartList[i]));
                 }
 
                 //Phase 3 - Start threads
-                for (int i = 0; i < ThreadLimit[j];i ++)
+                for (int i = 0; i < threadLimit[j];i ++)
                 {
-                    ThreadList[i].Start();
+                    threadList[i].Start();
                 }
-                string ms = "(ms)";
-                string b = "(b)";
-                Console.WriteLine($"\n{"DateTime",-25}{"ms",-22}{"b",-17}{"mins/secs",-15}{"Total Fails",-15}{"Added Fails",-15}{"Total Calls"}");
+                Console.WriteLine("");
+                Console.WriteLine($"{"DateTime",-25}{"ms",-22}{"b",-17}{"mins/secs",-17}{"200",-5}{"300",-5}{"400",-5}{"500",-14}{"Total Calls"}");
 
-                for (int i = 0; i < ThreadLimit[j]; i++)
+                for (int i = 0; i < threadLimit[j]; i++)
                 {
-                    while (ThreadList[i].IsAlive) { }
+                    while (threadList[i].IsAlive) { }
                 }
 
-                List<float> OverallAverageCallTimes = new List<float>();
-                List<double> OverallAverageSizeOfResponse = new List<double>();
-                int OverallTotalNumberOfFailedCalls = new int();
-                for (int i = 0; i < ThreadLimit[j]; i++)
+                List<float> overallAverageCallTimes = new List<float>();
+                List<double> overallAverageSizeOfResponse = new List<double>();
+                int overallTotalNumberOfFailedCalls = new int();
+                for (int i = 0; i < threadLimit[j]; i++)
                 {
-                    ThreadList[i].Join();
+                    threadList[i].Join();
                     Console.WriteLine($"\nAverages for Thread {i+1}: ");
-                    Console.WriteLine($"Average Length of API Call: {ListOfAPICalls[i].APICallsTimes.Average()}(ms) Average Size of Response: {ListOfAPICalls[i].ByteSizesList.Average()}(b) Number of Failed Calls:{ListOfAPICalls[i].FailedCalls}");
-                    OverallAverageCallTimes.Add(ListOfAPICalls[i].APICallsTimes.Average());
-                    OverallAverageSizeOfResponse.Add(ListOfAPICalls[i].ByteSizesList.Average());
-                    OverallTotalNumberOfFailedCalls = OverallTotalNumberOfFailedCalls + ListOfAPICalls[i].FailedCalls;
+                    Console.WriteLine($"Average Length of API Call: {listOfAPICalls[i].APICallsTimes.Average()}(ms) Average Size of Response: {listOfAPICalls[i].ByteSizesList.Average()}(b) Number of Failed Calls:{listOfAPICalls[i].FailedCalls}");
+                    overallAverageCallTimes.Add(listOfAPICalls[i].APICallsTimes.Average());
+                    overallAverageSizeOfResponse.Add(listOfAPICalls[i].ByteSizesList.Average());
+                    overallTotalNumberOfFailedCalls = overallTotalNumberOfFailedCalls + listOfAPICalls[i].FailedCalls;
                 }
                 Console.WriteLine($"\nAverages across each thread: ");
-                string output = $"{OverallAverageCallTimes.Average(),5}, {Math.Round(OverallAverageSizeOfResponse.Average()),5}, {OverallTotalNumberOfFailedCalls,5}";
+                string output = $"{overallAverageCallTimes.Average(),5}, {Math.Round(overallAverageSizeOfResponse.Average()),5}, {overallTotalNumberOfFailedCalls,5}";
                 Console.WriteLine(output);
 
                 File.AppendAllText(directory + filename,output);
@@ -195,7 +218,7 @@ namespace API_Load_Test
 
             
         }
-        void parseArguments(string[] args)
+        void ParseArguments(string[] args)
         {
             CommandLine.Parser.Default.ParseArguments<ArgsOptions>(args).WithParsed<ArgsOptions>(o =>
             {

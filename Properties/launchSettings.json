@@ -2,7 +2,7 @@
   "profiles": {
     "API Load Test": {
       "commandName": "Project",
-      "commandLineArgs": "--Threads \"10,10\" --CallsPerThread \"10,10\"",
+      "commandLineArgs": "--Threads \"100,100\" --CallsPerThread \"100,100\"",
       "workingDirectory": "C:\\Users\\layre\\OneDrive - Loughborough College\\Industry Placement\\EarthSense\\ES_LoadTester\\API Load Test"
     },
     "Profile 1": {
